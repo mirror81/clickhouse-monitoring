@@ -8,10 +8,12 @@ import type {
   AlertRuleSeverity,
 } from '@/lib/alerting/rule-registry'
 import type { AlertEventRecord } from './alert-history-store'
+import type { AlertRoute } from './alert-routing'
 import type { AlertDecision } from './alert-state-store'
 
 import { detectAdapter } from './adapters'
 import { recordAlertEvent } from './alert-history-store'
+import { listRoutes, resolveTargets } from './alert-routing'
 import { alertStateStore, evaluateAlert } from './alert-state-store'
 import {
   getServerAlertConfig,
@@ -240,20 +242,40 @@ export function buildAlertEventRecord(params: {
 }
 
 /**
+ * Owner id the sweep loads routes under. The sweep is a session-less cron
+ * job over env-configured hosts (`getClickHouseConfigs()`), never per-user D1
+ * connections — same reasoning as `alert-history-store.ts`'s host-only
+ * scoping — so it uses the OSS single-tenant convention rather than resolving
+ * a Clerk user. Per-user cloud routing over env hosts is not in scope here;
+ * see plans/30-per-rule-alert-routing.md open question 3.
+ */
+const SWEEP_ROUTING_OWNER_ID = ''
+
+/**
  * Autonomous health sweep: runs every registered alert rule over ALL hosts,
  * classifies severity from each rule's thresholds (with env overrides), and
- * dispatches a webhook alert for any finding at or above the configured minimum
+ * dispatches a notification for any finding at or above the configured minimum
  * severity — but only when the dedup state store says the alert is genuinely
  * new, escalated, past its cooldown, or a recovery. A persistent condition no
- * longer webhooks on every run.
+ * longer notifies on every run.
  *
- * Disabled (or no webhook URL) → rules still run, alerts are skipped.
+ * Destinations: for each finding, {@link resolveTargets} fans out to every
+ * matching per-rule/per-host route's channel URL (`alert-routing.ts`), or
+ * falls back to the legacy global `HEALTH_ALERT_WEBHOOK_URL` when nothing
+ * matches — so deployments that never configure a route behave exactly as
+ * before. Routes are best-effort (D1-backed; degrade to `[]` when D1 isn't
+ * configured), so a routing-table hiccup never blocks the legacy fallback.
+ *
+ * Disabled (or no webhook URL and no routes) → rules still run, alerts are
+ * skipped.
  */
 export async function runHealthSweep(): Promise<SweepSummary> {
   const ranAt = new Date().toISOString()
   const settings = getServerAlertConfig()
   const webhookConfigured = Boolean(settings.webhookUrl)
-  const canDispatch = settings.webhookEnabled && webhookConfigured
+  const routes: AlertRoute[] = await listRoutes(SWEEP_ROUTING_OWNER_ID)
+  const canDispatch =
+    settings.webhookEnabled && (webhookConfigured || routes.length > 0)
   const minRank = SEVERITY_ORDER[settings.minSeverity]
   const cooldownMs = getServerAlertCooldownMs()
 
@@ -297,6 +319,8 @@ export async function runHealthSweep(): Promise<SweepSummary> {
     hostId: number
     hostName: string
     ruleId: string
+    /** Rule type (base rules) or `'compound'` — matched by `resolveTargets`. */
+    ruleType: string
     ruleTitle: string
     severity: Severity
     value: number | null
@@ -306,6 +330,7 @@ export async function runHealthSweep(): Promise<SweepSummary> {
       hostId,
       hostName: name,
       ruleId,
+      ruleType,
       ruleTitle,
       severity,
       value,
@@ -324,39 +349,61 @@ export async function runHealthSweep(): Promise<SweepSummary> {
         decision.kind === 'recovery'
           ? `[RECOVERY] ${ruleTitle} — resolved (host ${name})`
           : `[${effective.toUpperCase()}] ${ruleTitle} — ${label} (host ${name})`
-      const result = await postWebhook(settings.webhookUrl, text)
-      if (result.ok) {
-        // Persist "notified" only now — a failed delivery leaves no
-        // record, so the next sweep retries instead of suppressing.
-        commit()
-        alertsDispatched++
-        if (decision.kind === 'recovery') recoveries++
+
+      // Fan out to every matched route's channel (plan 30), falling back to
+      // the legacy global webhook when nothing matches (see `alert-routing.ts`).
+      // Dedup (`evaluateAlert`) already ran ONCE above for this finding —
+      // fan-out never multiplies cooldown state, it only multiplies where the
+      // single decision is sent.
+      const targets = resolveTargets(
+        routes,
+        { ruleId, ruleType, hostId, hostName: name },
+        settings.webhookUrl
+      )
+
+      let anyDelivered = false
+      for (const url of targets) {
+        const result = await postWebhook(url, text)
+        if (result.ok) anyDelivered = true
+
+        // Best-effort audit trail per channel — recorded on both success and
+        // failure so a slow or failing D1 write can never delay or drop the
+        // alert that was just dispatched. recordAlertEvent already never
+        // throws; the try/catch here is defense-in-depth, mirroring the
+        // generateInsights call below. detectAdapter picks the per-URL channel
+        // label (plan 26), so a fan-out to mixed Slack/Discord/Opsgenie
+        // destinations is audited per its own adapter.
+        try {
+          await recordAlertEvent(
+            buildAlertEventRecord({
+              hostId,
+              hostLabel: name,
+              ruleId,
+              decision,
+              value,
+              delivered: result.ok,
+              error: result.error,
+              channel: detectAdapter(url).id,
+            })
+          )
+        } catch (err) {
+          debug(
+            `[health-sweep] alert-history record failed for host ${hostId} rule ${ruleId}`,
+            err instanceof Error ? err.message : String(err)
+          )
+        }
       }
 
-      // Best-effort audit trail — recorded AFTER the commit/counters
-      // above (on both success and failure) so a slow or failing D1
-      // write can never delay or drop the alert that was just
-      // dispatched. recordAlertEvent already never throws; the
-      // try/catch here is defense-in-depth, mirroring the
-      // generateInsights call below.
-      try {
-        await recordAlertEvent(
-          buildAlertEventRecord({
-            hostId,
-            hostLabel: name,
-            ruleId,
-            decision,
-            value,
-            delivered: result.ok,
-            error: result.error,
-            channel: detectAdapter(settings.webhookUrl).id,
-          })
-        )
-      } catch (err) {
-        debug(
-          `[health-sweep] alert-history record failed for host ${hostId} rule ${ruleId}`,
-          err instanceof Error ? err.message : String(err)
-        )
+      // Persist "notified" only when there was nothing to deliver (no
+      // targets — not a failure) or at least one channel succeeded. A failed
+      // delivery with no successes leaves no record, so the next sweep retries
+      // instead of suppressing.
+      if (targets.length === 0 || anyDelivered) {
+        commit()
+        if (anyDelivered) {
+          alertsDispatched++
+          if (decision.kind === 'recovery') recoveries++
+        }
       }
     } else {
       // Non-notify decisions (dedup/de-escalation/recovery-cleared
@@ -420,6 +467,7 @@ export async function runHealthSweep(): Promise<SweepSummary> {
             ruleTitle: rule.title,
             severity,
             value,
+            ruleType: rule.type,
             label: rule.formatLabel ? rule.formatLabel(value) : String(value),
           })
         }
@@ -479,6 +527,7 @@ export async function runHealthSweep(): Promise<SweepSummary> {
             hostId: config.id,
             hostName: name,
             ruleId: compound.id,
+            ruleType: 'compound',
             ruleTitle: compound.title,
             severity,
             value: null,

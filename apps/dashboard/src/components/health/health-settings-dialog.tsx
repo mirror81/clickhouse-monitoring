@@ -3,6 +3,7 @@ import { toast } from 'sonner'
 
 import { HEALTH_CHECKS } from './health-checks'
 import { RecentAlertsCard } from './recent-alerts-card'
+import { WebhookSubscriptionsPanel } from './webhook-subscriptions-panel'
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import {
@@ -179,6 +180,7 @@ export function HealthSettingsDialog() {
             <TabsTrigger value="thresholds">Thresholds</TabsTrigger>
             <TabsTrigger value="alerts">Alerts</TabsTrigger>
             <TabsTrigger value="history">History</TabsTrigger>
+            <TabsTrigger value="webhooks">Webhooks</TabsTrigger>
           </TabsList>
 
           <TabsContent value="thresholds">
@@ -364,6 +366,12 @@ export function HealthSettingsDialog() {
 
           <TabsContent value="history">
             <RecentAlertsCard />
+          </TabsContent>
+
+          <TabsContent value="webhooks">
+            <ScrollArea className="h-[420px] pr-3">
+              <WebhookSubscriptionsPanel />
+            </ScrollArea>
           </TabsContent>
         </Tabs>
 

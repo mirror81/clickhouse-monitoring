@@ -14,17 +14,17 @@
  * (fail-open — see plans/52-proactive-weekly-health-report.md).
  */
 
-import type { InsightSeverity } from './types'
 import type { ForecastResult } from '@/lib/ai/advisor/capacity-forecaster'
+import type { InsightSeverity } from './types'
 
-import { debug, warn } from '@chm/logger'
-import { forecastDiskFull } from '@/lib/ai/advisor/capacity-forecaster'
-import { validateHostUrl } from '@/lib/browser-connections/host-url'
 import { listBaselines } from './baseline-store'
 import { resolveInsightsStore } from './store/resolve-store'
 import { INSIGHT_SOURCES, insightKey } from './types'
 import { renderWeeklyReportHtml } from './weekly-report-html'
 import { persistWeeklyReport } from './weekly-report-store'
+import { debug, warn } from '@chm/logger'
+import { forecastDiskFull } from '@/lib/ai/advisor/capacity-forecaster'
+import { validateHostUrl } from '@/lib/browser-connections/host-url'
 
 const WINDOW_SINCE = '7 DAY'
 const WINDOW_DAYS = 7

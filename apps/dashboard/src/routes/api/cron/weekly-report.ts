@@ -30,11 +30,11 @@ import { error, warn } from '@chm/logger'
 import { getClickHouseConfigsFromEnv } from '@/lib/api/clickhouse-config'
 import { bridgeClickHouseEnv } from '@/lib/api/server-env'
 import { secretsMatch } from '@/lib/auth/providers/constant-time'
-import { getHost } from '@/lib/utils'
 import {
   parseOptedInHosts,
   runWeeklyReportForHost,
 } from '@/lib/insights/weekly-report'
+import { getHost } from '@/lib/utils'
 
 /**
  * Authorize a cron request. Returns a short-circuit `Response` when the request

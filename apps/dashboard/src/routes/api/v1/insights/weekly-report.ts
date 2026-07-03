@@ -21,14 +21,15 @@
 
 import { createFileRoute } from '@tanstack/react-router'
 
+import type { WeeklyReportSummary } from '@/lib/insights/weekly-report'
+
 import { error, generateRequestId } from '@chm/logger'
+import { renderWeeklyReportHtml } from '@/lib/insights/weekly-report-html'
 import {
   getWeeklyReport,
   listWeeklyReports,
   type WeeklyReportRecord,
 } from '@/lib/insights/weekly-report-store'
-import type { WeeklyReportSummary } from '@/lib/insights/weekly-report'
-import { renderWeeklyReportHtml } from '@/lib/insights/weekly-report-html'
 
 /** Re-render HTML from the stored summary when the persisted `html` is empty. */
 function htmlFor(record: WeeklyReportRecord): string {

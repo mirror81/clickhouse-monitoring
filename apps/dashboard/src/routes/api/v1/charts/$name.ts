@@ -37,6 +37,7 @@ import {
   putEdgeCache,
 } from '@/lib/api/shared/edge-cache'
 import { statusForFetchDataError } from '@/lib/api/shared/fetch-data-error'
+import { isDemoHostBlockedForRequest } from '@/lib/cloud/reject-demo-host'
 import { authorizeFeatureRequest } from '@/lib/feature-permissions/server'
 
 /**
@@ -66,6 +67,28 @@ export async function handler(
       },
       { status: 400 }
     )
+  }
+
+  // Cloud demo-hiding invariant (#2172): user connections always use negative
+  // hostIds, so a non-negative id from a signed-in cloud principal can only be
+  // the hidden env/demo host. Reject with the same structured-empty shape used
+  // for an optional chart's missing table, rather than a 403/leak. No-op for
+  // OSS and anonymous cloud callers (both legitimately use hostId=0).
+  if (await isDemoHostBlockedForRequest(hostId, bindings)) {
+    return Response.json({
+      success: true,
+      data: [],
+      metadata: {
+        queryId: '',
+        duration: 0,
+        rows: 0,
+        host: String(hostId),
+        unavailable: {
+          reason: 'demo_hidden',
+          message: 'The demo host is hidden for signed-in accounts.',
+        },
+      },
+    })
   }
 
   // Check if chart exists

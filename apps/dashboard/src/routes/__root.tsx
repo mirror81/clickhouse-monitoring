@@ -18,6 +18,7 @@ import { TimezoneProvider } from '@/lib/context/timezone-context'
 import { FeaturePermissionsProvider } from '@/lib/feature-permissions/context'
 import { UserConnectionsCacheGuard } from '@/lib/hooks/user-connections-cache-guard'
 import { QueryProvider } from '@/lib/query/provider'
+import { getDeployTarget } from '@/lib/telemetry/environment'
 import { ThemeProvider } from '@/lib/theme/theme-provider'
 
 // Typed global `?host=` search param, declared on the ROOT so every route
@@ -166,6 +167,11 @@ function RootDocument({ children }: Readonly<{ children: ReactNode }>) {
     <html lang="en" suppressHydrationWarning>
       <head>
         <HeadContent />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `window.__CHM_DEPLOY_TARGET__ = "${getDeployTarget()}";`,
+          }}
+        />
       </head>
       <body className="bg-background font-sans antialiased">
         <StructuredData />

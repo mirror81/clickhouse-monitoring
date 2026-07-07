@@ -21,9 +21,53 @@ export type ChFlavor = 'oss' | 'altinity' | 'cloud' | 'unknown'
  * set, or a Docker build that doesn't set it yet).
  */
 export function getDeployTarget(): DeployTarget {
+  // 1. Check if server-injected target is available in the browser window
+  if (typeof window !== 'undefined' && (window as any).__CHM_DEPLOY_TARGET__) {
+    const injected = (window as any).__CHM_DEPLOY_TARGET__
+    const VALID: DeployTarget[] = ['docker', 'helm', 'cf', 'dev', 'unknown']
+    if (VALID.includes(injected)) return injected
+  }
+
+  // 2. Build-time env variable override
   const raw = import.meta.env.VITE_DEPLOY_TARGET?.trim().toLowerCase()
   const VALID: DeployTarget[] = ['docker', 'helm', 'cf', 'dev', 'unknown']
   if (raw && (VALID as string[]).includes(raw)) return raw as DeployTarget
+
+  // 3. Fallback: server-side process env inspection (SSR)
+  if (typeof process !== 'undefined' && process.env) {
+    if (process.env.KUBERNETES_SERVICE_HOST || process.env.KUBERNETES_PORT) {
+      return 'helm'
+    }
+    if (process.env.DOCKER_CONTAINER || process.env.NODE_ENV === 'production') {
+      return 'docker'
+    }
+    if (process.env.NODE_ENV === 'development') {
+      return 'dev'
+    }
+  }
+
+  // 4. Client-side hostname heuristics
+  if (typeof window !== 'undefined' && window.location) {
+    const host = window.location.hostname
+    if (
+      host === 'localhost' ||
+      host === '127.0.0.1' ||
+      host.endsWith('.local')
+    ) {
+      return 'dev'
+    }
+    if (
+      host.endsWith('.workers.dev') ||
+      host.endsWith('.pages.dev') ||
+      host === 'dash.chmonitor.dev' ||
+      host === 'telemetry.chmonitor.dev'
+    ) {
+      return 'cf'
+    }
+    // Default fallback for self-hosted domain deployments is typically docker
+    return 'docker'
+  }
+
   return 'unknown'
 }
 

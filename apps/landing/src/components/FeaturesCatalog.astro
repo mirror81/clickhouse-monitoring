@@ -65,7 +65,7 @@ const scopes = groups.map((g) => g.scope)
         type="button"
         data-scope=""
         data-on="true"
-        class="feature-scope-chip inline-flex h-7 max-w-[9.5rem] shrink-0 items-center gap-1.5 rounded-full bg-primary px-2.5 text-xs font-medium text-primary-foreground transition-colors"
+        class="feature-scope-chip inline-flex h-7 max-w-[9.5rem] shrink-0 items-center gap-1.5 rounded-full bg-primary px-2.5 text-xs font-medium text-primary-foreground transition-colors border-0 border-transparent outline-none focus:outline-none focus:ring-0 focus-visible:ring-0"
       >
         <span class="truncate">All</span>
         <span class="tabular-nums text-[10px] text-primary-foreground/80">{totalCount}</span>
@@ -78,7 +78,7 @@ const scopes = groups.map((g) => g.scope)
               type="button"
               data-scope={scope}
               title={scope}
-              class="feature-scope-chip inline-flex h-7 max-w-[9.5rem] shrink-0 items-center gap-1.5 rounded-full bg-muted/80 px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              class="feature-scope-chip inline-flex h-7 max-w-[9.5rem] shrink-0 items-center gap-1.5 rounded-full bg-muted/80 px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground border-0 border-transparent outline-none focus:outline-none focus:ring-0 focus-visible:ring-0"
             >
               <span class="truncate">{scopeChipLabel(scope)}</span>
               {group ? (

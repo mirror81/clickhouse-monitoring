@@ -39,7 +39,7 @@ const btnGhost =
         data-hero-oss
       >
         <span class="inline-flex items-center gap-2 rounded-full border border-border bg-neutral-100 dark:bg-neutral-800 px-4 py-1.5 text-neutral-800 text-sm font-medium dark:text-neutral-200">
-          <span set:html={githubSvg} />
+          <span class="inline-flex items-center justify-center size-4 shrink-0" set:html={githubSvg} />
           Open source · GPL-3.0 · self-host free
         </span>
       </a>
@@ -61,7 +61,7 @@ const btnGhost =
           class={btnPrimary}
         >
           Start free
-          <span set:html={arrowSvg} />
+          <span class="inline-flex items-center justify-center size-4 shrink-0" set:html={arrowSvg} />
         </a>
         <a
           href="https://docs.chmonitor.dev"
@@ -70,7 +70,7 @@ const btnGhost =
           data-cta="hero-self-host"
           class={btnOutline}
         >
-          <span set:html={bookSvg} />
+          <span class="inline-flex items-center justify-center size-4 shrink-0" set:html={bookSvg} />
           Self-host
         </a>
         {
@@ -82,7 +82,7 @@ const btnGhost =
               data-cta="github-star-hero"
               class={btnGhost}
             >
-              <span set:html={starSvg} />
+              <span class="inline-flex items-center justify-center size-4 shrink-0" set:html={starSvg} />
               <span class="tabular-nums">{starLabel}</span>
             </a>
           ) : null

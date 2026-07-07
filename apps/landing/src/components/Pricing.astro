@@ -19,6 +19,13 @@ const outlineBtn =
   'inline-flex w-full items-center justify-center gap-2 rounded-md border border-input bg-background px-6 h-10 text-sm font-medium shadow-xs transition-all hover:bg-accent active:scale-[.98] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50'
 const outlineBtnAuto =
   'inline-flex items-center justify-center gap-2 rounded-md border border-input bg-background px-6 h-10 text-sm font-medium shadow-xs transition-all hover:bg-accent active:scale-[.98] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50'
+
+const cardColors = [
+  'bg-[#f3f4f6]/70 border-transparent dark:bg-neutral-900/40', // Free
+  'bg-[#f0f9ff]/90 border-transparent dark:bg-sky-950/20',     // Pro
+  'bg-[#fdf4ff]/90 border-transparent dark:bg-purple-950/20',  // Max
+  'bg-[#fffbeb]/90 border-transparent dark:bg-amber-950/20',   // Enterprise
+]
 ---
 <section id="pricing" class="py-20 sm:py-24">
   <div class="mx-auto max-w-6xl px-6">
@@ -40,7 +47,7 @@ const outlineBtnAuto =
         <p class="max-w-[62ch] text-pretty text-sm text-muted-foreground">Run it on your own infrastructure — Docker, Cloudflare Workers, or Kubernetes. All features, unlimited clusters, and your data stays with you.</p>
       </div>
       <a class={outlineBtnAuto} href="https://docs.chmonitor.dev" target="_blank" rel="noopener">
-        Read the quickstart <span set:html={arrowSvg} />
+        Read the quickstart <span class="inline-flex items-center justify-center size-4 shrink-0" set:html={arrowSvg} />
       </a>
     </div>
 
@@ -50,7 +57,7 @@ const outlineBtnAuto =
         <span class="size-1.5 rounded-full bg-neutral-500"></span>
         Early access — paid plans free while in beta
       </span>
-      <div class="bill-toggle inline-flex gap-0.5 rounded-full border border-border bg-card p-1" role="tablist" aria-label="Billing period">
+      <div class="bill-toggle inline-flex gap-0.5 rounded-full bg-card p-1" role="tablist" aria-label="Billing period">
         <button type="button" data-period="monthly" role="tab" aria-selected="false" class="billing-toggle-btn inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground active:scale-[.98] border-0 border-transparent outline-none focus:outline-none focus:ring-0 focus-visible:ring-0">Monthly</button>
         <button type="button" data-period="yearly" role="tab" aria-selected="true" class="billing-toggle-btn active inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-sm font-medium transition-colors active:scale-[.98] border-0 border-transparent outline-none focus:outline-none focus:ring-0 focus-visible:ring-0">
           Yearly <span class="save text-xs font-semibold">{monthsFreeText(yearlyMonthsFreeValue)} free</span>
@@ -59,8 +66,8 @@ const outlineBtnAuto =
     </div>
 
     <div class="cloud-grid reveal mt-5 grid items-stretch gap-4 sm:grid-cols-2 lg:grid-cols-4" data-period="yearly">
-      {tiers.map((t) => (
-        <div class="flex flex-col rounded-xl border border-border bg-card p-6 shadow-xs transition-colors">
+      {tiers.map((t, idx) => (
+        <div class={`flex flex-col rounded-xl border p-6 shadow-xs transition-colors ${cardColors[idx]}`}>
           <div>
             <div class="flex flex-wrap items-center gap-2">
               <span class="font-bold text-lg tracking-tight">{t.name}</span>
@@ -93,7 +100,7 @@ const outlineBtnAuto =
           <ul class="mt-6 space-y-2.5">
             {t.rows.map((r) => (
               <li class={`flex items-start gap-2 text-sm text-foreground ${r.startsWith('Everything in') ? 'font-medium' : ''}`}>
-                <span set:html={checkSvg} />
+                <span class="inline-flex items-center justify-center size-4 shrink-0" set:html={checkSvg} />
                 <span>{r}</span>
               </li>
             ))}
@@ -106,7 +113,7 @@ const outlineBtnAuto =
               rel="noopener"
               data-cta={`pricing-${t.name.toLowerCase().replace(/\s+/g, '-')}`}
             >
-              {t.cta.label} <span set:html={arrowSvg} />
+              {t.cta.label} <span class="inline-flex items-center justify-center size-4 shrink-0" set:html={arrowSvg} />
             </a>
           </div>
         </div>
@@ -116,7 +123,7 @@ const outlineBtnAuto =
     {!compact && (
     <div class="reveal mt-7 text-center">
       <a class={outlineBtnAuto} href="/pricing">
-        Compare all plans &amp; features <span set:html={arrowSvg} />
+        Compare all plans &amp; features <span class="inline-flex items-center justify-center size-4 shrink-0" set:html={arrowSvg} />
       </a>
     </div>
     )}

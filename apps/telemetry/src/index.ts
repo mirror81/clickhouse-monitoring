@@ -13,8 +13,12 @@
 //   - No IPs, hostnames, query text, or free-text are stored. The request IP is
 //     never written to Analytics Engine.
 //
-// There is no auth: this is a public, write-only ingest. It cannot be read back
-// over HTTP — only the project's Cloudflare account can query the dataset.
+// Auth: /v1/ping and /v1/event are unauthenticated, write-only ingest paths.
+// The ONLY read-back over HTTP is GET /v1/summary — a public, AGGREGATE-ONLY
+// view (distinct-install counts by deploy_target / ch_version). No
+// instance_hash, IP, hostname, or free-text is ever exposed by it — only
+// integer COUNT(DISTINCT instance_hash) values. The raw dataset remains
+// queryable only from the project's Cloudflare account (D1 + Analytics Engine).
 
 export interface Env {
   CHM_TELEMETRY_AE: AnalyticsEngineDataset
@@ -33,6 +37,16 @@ const MAX_BODY_BYTES = 2048
 // keep this worker a zero-dependency standalone deploy unit; keep them in sync.
 const DEPLOY_TARGETS = new Set(['docker', 'helm', 'cf', 'dev', 'unknown'])
 const CH_FLAVORS = new Set(['oss', 'altinity', 'cloud', 'unknown'])
+const PLATFORMS = new Set([
+  'windows',
+  'macos',
+  'linux',
+  'android',
+  'ios',
+  'unknown',
+])
+// ISO 3166-1 alpha-2 codes (common countries only - validate format, not membership)
+const COUNTRY_CODE = /^[a-z]{2}$/i
 const EVENTS = new Set([
   'app_loaded',
   'cluster_connected',
@@ -46,7 +60,7 @@ const MAJOR_MINOR = /^\d{1,3}\.\d{1,3}$/
 
 const CORS: Record<string, string> = {
   'access-control-allow-origin': '*',
-  'access-control-allow-methods': 'POST, OPTIONS',
+  'access-control-allow-methods': 'GET, POST, OPTIONS',
   'access-control-allow-headers': 'content-type',
   'access-control-max-age': '86400',
 }
@@ -87,11 +101,386 @@ export default {
 
     if (req.method === 'OPTIONS') return noContent()
 
-    if (req.method === 'GET' && (pathname === '/' || pathname === '/health')) {
-      return new Response('chmonitor telemetry collector\n', {
+    if (req.method === 'GET' && pathname === '/health') {
+      return new Response('OK\n', {
         status: 200,
         headers: { 'content-type': 'text/plain', ...CORS },
       })
+    }
+
+    if (req.method === 'GET' && pathname === '/') {
+      // Serve the analytics dashboard HTML
+      const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>chmonitor Telemetry Analytics</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+      background: #ffffff;
+      color: #000000;
+      padding: 40px 20px;
+      line-height: 1.5;
+    }
+
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    header {
+      margin-bottom: 40px;
+    }
+
+    h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    .subtitle {
+      color: #666666;
+      font-size: 1rem;
+    }
+
+    .loading {
+      padding: 40px 0;
+      color: #666666;
+    }
+
+    .error {
+      border: 1px solid #000000;
+      padding: 20px;
+      margin: 20px 0;
+      color: #000000;
+      background: #ffffff;
+    }
+
+    .info-box {
+      border: 1px solid #000000;
+      padding: 20px;
+      margin-bottom: 40px;
+    }
+
+    .info-box h3 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .info-box p {
+      font-size: 0.9rem;
+      color: #333333;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 20px;
+      margin-bottom: 40px;
+      border-top: 1px solid #000000;
+      border-bottom: 1px solid #000000;
+      padding: 20px 0;
+    }
+
+    .stat-card {
+      background: #ffffff;
+    }
+
+    .stat-label {
+      font-size: 0.8rem;
+      color: #666666;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 4px;
+    }
+
+    .stat-value {
+      font-size: 1.75rem;
+      font-weight: 700;
+    }
+
+    .section {
+      margin-bottom: 45px;
+    }
+
+    .section h2 {
+      font-size: 1.25rem;
+      font-weight: 600;
+      margin-bottom: 20px;
+      border-bottom: 1px solid #000000;
+      padding-bottom: 8px;
+    }
+
+    .bar-chart {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .bar-item {
+      display: flex;
+      align-items: center;
+      font-size: 0.9rem;
+    }
+
+    .bar-label {
+      width: 150px;
+      flex-shrink: 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .bar-track {
+      flex-grow: 1;
+      height: 12px;
+      background: #f0f0f0;
+      margin: 0 16px;
+    }
+
+    .bar-fill {
+      height: 100%;
+      background: #000000;
+    }
+
+    .bar-value {
+      width: 80px;
+      text-align: right;
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+
+    .footer {
+      margin-top: 60px;
+      padding-top: 20px;
+      border-top: 1px solid #e0e0e0;
+      font-size: 0.85rem;
+      color: #666666;
+    }
+
+    .footer a {
+      color: #000000;
+      text-decoration: underline;
+    }
+
+    .footer a:hover {
+      text-decoration: none;
+    }
+
+    @media (max-width: 600px) {
+      .bar-item {
+        flex-wrap: wrap;
+      }
+      .bar-track {
+        width: 100%;
+        margin: 8px 0;
+        order: 3;
+      }
+      .bar-value {
+        margin-left: auto;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>chmonitor Telemetry</h1>
+      <p class="subtitle">Anonymous ClickHouse monitoring adoption analytics</p>
+    </header>
+
+    <div id="loading" class="loading">Loading analytics...</div>
+    <div id="error" class="error" style="display: none;"></div>
+
+    <div id="content" style="display: none;">
+      <div class="info-box">
+        <h3>Privacy-First Analytics</h3>
+        <p>
+          All data is 100% anonymous. No IPs, hostnames, or identifying information are recorded.
+          Only COUNT(DISTINCT) of SHA-256 hashed instance IDs are processed. Each install generates a unique
+          hash that cannot be reversed to identify the original instance.
+        </p>
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-label">Total Installs</div>
+          <div class="stat-value" id="total">0</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Data Source</div>
+          <div class="stat-value" id="source">-</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Last Updated</div>
+          <div class="stat-value" id="updated" style="font-size: 1rem; line-height: 1.75rem;">-</div>
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>Deployment Targets</h2>
+        <div id="deploy-targets" class="bar-chart"></div>
+      </div>
+
+      <div class="section">
+        <h2>ClickHouse Versions</h2>
+        <div id="ch-versions" class="bar-chart"></div>
+      </div>
+
+      <div class="section">
+        <h2>Geographic Distribution</h2>
+        <div id="countries" class="bar-chart"></div>
+      </div>
+
+      <div class="section">
+        <h2>Platform Distribution</h2>
+        <div id="platforms" class="bar-chart"></div>
+      </div>
+
+      <div class="section" id="ch-flavor-section" style="display: none;">
+        <h2>ClickHouse Flavors</h2>
+        <div id="ch-flavors" class="bar-chart"></div>
+      </div>
+
+      <div class="footer">
+        <p>
+          Data updates every hour • Powered by <a href="https://chmonitor.dev">chmonitor</a> •
+          <a href="https://github.com/chmonitor/chmonitor">GitHub</a>
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    async function loadAnalytics() {
+      const loading = document.getElementById('loading');
+      const error = document.getElementById('error');
+      const content = document.getElementById('content');
+
+      try {
+        const response = await fetch('https://telemetry.chmonitor.dev/v1/summary');
+
+        if (!response.ok) {
+          throw new Error(\`HTTP \${response.status}: \${response.statusText}\`);
+        }
+
+        const data = await response.json();
+
+        if (data.error) {
+          throw new Error(data.error);
+        }
+
+        loading.style.display = 'none';
+        content.style.display = 'block';
+
+        // Update stats cards
+        document.getElementById('total').textContent = data.total_installs.toLocaleString();
+        document.getElementById('source').textContent = data.source.split('(')[0].trim();
+        document.getElementById('updated').textContent = new Date(data.generated_at).toLocaleString();
+
+        // Render deployment targets
+        const deployTargetsArray = Object.entries(data.by_deploy_target || {}).map(([target, installs]) => ({
+          deploy_target: target,
+          installs: installs
+        }));
+        renderBarChart('deploy-targets', deployTargetsArray);
+
+        // Render ClickHouse versions
+        renderBarChart('ch-versions', data.by_ch_version);
+
+        // Render countries
+        renderBarChart('countries', data.by_country);
+
+        // Render platforms
+        renderBarChart('platforms', data.by_platform);
+
+        // Render ClickHouse flavors (if available)
+        if (data.by_ch_flavor && data.by_ch_flavor.length > 0) {
+          document.getElementById('ch-flavor-section').style.display = 'block';
+          renderBarChart('ch-flavors', data.by_ch_flavor);
+        }
+
+      } catch (err) {
+        loading.style.display = 'none';
+        error.style.display = 'block';
+        error.textContent = \`Failed to load analytics: \${err.message}\`;
+        console.error('Analytics loading error:', err);
+      }
+    }
+
+    function renderBarChart(containerId, data) {
+      const container = document.getElementById(containerId);
+      if (!data || data.length === 0) {
+        container.innerHTML = '<p style="color: #999;">No data available</p>';
+        return;
+      }
+
+      const maxValue = Math.max(...data.map(item => item.installs));
+
+      container.innerHTML = data
+        .sort((a, b) => b.installs - a.installs)
+        .map(item => {
+          const percentage = (item.installs / maxValue) * 100;
+          const key = Object.keys(item).find(k => k !== 'installs');
+          const label = item[key];
+
+          return \`
+            <div class="bar-item">
+              <div class="bar-label">\${formatLabel(label)}</div>
+              <div class="bar-track">
+                <div class="bar-fill" style="width: \${percentage}%;"></div>
+              </div>
+              <div class="bar-value">\${item.installs.toLocaleString()}</div>
+            </div>
+          \`;
+        })
+        .join('');
+    }
+
+    function formatLabel(label) {
+      if (label === 'unknown') return 'Unknown';
+      if (label === 'docker') return 'Docker';
+      if (label === 'helm') return 'Helm';
+      if (label === 'cf') return 'Cloudflare';
+      if (label === 'dev') return 'Development';
+      if (label === 'windows') return 'Windows';
+      if (label === 'macos') return 'macOS';
+      if (label === 'linux') return 'Linux';
+      if (label === 'android') return 'Android';
+      if (label === 'ios') return 'iOS';
+      if (label === 'oss') return 'OSS';
+      if (label === 'altinity') return 'Altinity';
+      if (label === 'cloud') return 'Cloud';
+      return label;
+    }
+
+    // Load analytics on page load
+    loadAnalytics();
+  </script>
+</body>
+</html>`
+
+      return new Response(html, {
+        status: 200,
+        headers: {
+          'content-type': 'text/html; charset=utf-8',
+          'cache-control': 'public, max-age=300', // 5 min cache
+          ...CORS,
+        },
+      })
+    }
+
+    if (req.method === 'GET' && pathname === '/v1/summary') {
+      return handleSummary(env, req)
     }
 
     if (req.method !== 'POST') return bad(405, 'method not allowed')
@@ -109,12 +498,18 @@ export default {
       }
       const deployTarget = asEnum(data.deploy_target, DEPLOY_TARGETS, 'unknown')
       const chVersion = asVersion(data.ch_version)
+      const chFlavor = asEnum(data.ch_flavor, CH_FLAVORS, 'unknown')
+      const country =
+        typeof data.country === 'string' && COUNTRY_CODE.test(data.country)
+          ? data.country.toLowerCase()
+          : 'unknown'
+      const platform = asEnum(data.platform, PLATFORMS, 'unknown')
 
       env.CHM_TELEMETRY_AE.writeDataPoint({
         // index1 — distinct-install key. Count installs with uniqExact(index1).
         indexes: [instanceHash],
-        // blob1=kind, blob2=deploy_target, blob3=ch_version
-        blobs: ['ping', deployTarget, chVersion],
+        // blob1=kind, blob2=deploy_target, blob3=ch_version, blob4=ch_flavor, blob5=country, blob6=platform
+        blobs: ['ping', deployTarget, chVersion, chFlavor, country, platform],
         doubles: [1],
       })
 
@@ -126,9 +521,17 @@ export default {
         const day = new Date().toISOString().slice(0, 10) // YYYY-MM-DD (UTC)
         ctx.waitUntil(
           env.CHM_TELEMETRY_DB.prepare(
-            'INSERT OR IGNORE INTO ping_daily (day, instance_hash, deploy_target, ch_version) VALUES (?, ?, ?, ?)'
+            'INSERT OR IGNORE INTO ping_daily (day, instance_hash, deploy_target, ch_version, ch_flavor, country, platform) VALUES (?, ?, ?, ?, ?, ?, ?)'
           )
-            .bind(day, instanceHash, deployTarget, chVersion || null)
+            .bind(
+              day,
+              instanceHash,
+              deployTarget,
+              chVersion || null,
+              chFlavor || null,
+              country || null,
+              platform || null
+            )
             .run()
             .then(() => undefined)
             .catch(() => undefined)
@@ -163,4 +566,154 @@ export default {
 
     return bad(404, 'not found')
   },
+}
+
+// ---------------------------------------------------------------------------
+// GET /v1/summary — public, aggregate-only install counts (anonymous).
+// ---------------------------------------------------------------------------
+// Reads the D1 forever-store (ping_daily). Every number is a
+// COUNT(DISTINCT instance_hash) — distinct installs. Optional
+// ?deploy_target=docker|helm|cf|dev|unknown scopes total + by_ch_version to
+// that target (by_deploy_target is always global). Cached at the edge for 1h.
+//
+// Data accumulates from the moment the D1 binding was wired (2026-07-07)
+// forward; Analytics Engine still holds the prior ~3 months but is not
+// binding-readable, so historical totals are not reflected here.
+async function handleSummary(env: Env, req: Request): Promise<Response> {
+  const base = summaryShape({
+    total: 0,
+    byDeployTarget: {},
+    byChVersion: [],
+    byChFlavor: [],
+    byCountry: [],
+    byPlatform: [],
+  })
+
+  if (!env.CHM_TELEMETRY_DB) {
+    return json({ ...base, enabled: false }, 503)
+  }
+
+  const { searchParams } = new URL(req.url)
+  const targetParam = searchParams.get('deploy_target')
+  const scoped =
+    targetParam && DEPLOY_TARGETS.has(targetParam) ? targetParam : null
+
+  // Same WHERE clause for total + by-version when scoped; by_deploy_target
+  // stays global so the breakdown is always visible.
+  const where = scoped ? 'WHERE deploy_target = ?' : ''
+  const stmt = (sql: string) =>
+    scoped
+      ? env.CHM_TELEMETRY_DB!.prepare(sql).bind(scoped)
+      : env.CHM_TELEMETRY_DB!.prepare(sql)
+
+  try {
+    const [totalRow, byTarget, byVersion, byFlavor, byCountry, byPlatform] =
+      await Promise.all([
+        stmt(
+          `SELECT COUNT(DISTINCT instance_hash) AS n FROM ping_daily ${where}`
+        ).first<{
+          n: number
+        }>(),
+        env
+          .CHM_TELEMETRY_DB!.prepare(
+            'SELECT deploy_target, COUNT(DISTINCT instance_hash) AS n FROM ping_daily GROUP BY deploy_target'
+          )
+          .all<{ deploy_target: string; n: number }>(),
+        stmt(
+          `SELECT COALESCE(ch_version, 'unknown') AS v, COUNT(DISTINCT instance_hash) AS n FROM ping_daily ${where} GROUP BY v ORDER BY n DESC`
+        ).all<{ v: string; n: number }>(),
+        stmt(
+          `SELECT COALESCE(ch_flavor, 'unknown') AS v, COUNT(DISTINCT instance_hash) AS n FROM ping_daily ${where} GROUP BY v ORDER BY n DESC`
+        ).all<{ v: string; n: number }>(),
+        stmt(
+          `SELECT COALESCE(country, 'unknown') AS v, COUNT(DISTINCT instance_hash) AS n FROM ping_daily ${where} GROUP BY v ORDER BY n DESC LIMIT 10`
+        ).all<{ v: string; n: number }>(),
+        stmt(
+          `SELECT COALESCE(platform, 'unknown') AS v, COUNT(DISTINCT instance_hash) AS n FROM ping_daily ${where} GROUP BY v ORDER BY n DESC`
+        ).all<{ v: string; n: number }>(),
+      ])
+
+    const byDeployTarget: Record<string, number> = {}
+    for (const r of byTarget.results ?? []) {
+      byDeployTarget[r.deploy_target] = Number(r.n)
+    }
+
+    return json(
+      summaryShape({
+        total: Number(totalRow?.n ?? 0),
+        byDeployTarget,
+        byChVersion: (byVersion.results ?? []).map((r) => ({
+          ch_version: r.v,
+          installs: Number(r.n),
+        })),
+        byChFlavor: (byFlavor.results ?? []).map((r) => ({
+          ch_flavor: r.v,
+          installs: Number(r.n),
+        })),
+        byCountry: (byCountry.results ?? []).map((r) => ({
+          country: r.v,
+          installs: Number(r.n),
+        })),
+        byPlatform: (byPlatform.results ?? []).map((r) => ({
+          platform: r.v,
+          installs: Number(r.n),
+        })),
+        scopedToDeployTarget: scoped,
+      }),
+      200
+    )
+  } catch {
+    return json({ ...base, enabled: true, error: 'summary query failed' }, 500)
+  }
+}
+
+interface SummaryBody {
+  summary: string
+  anonymous: boolean
+  enabled: boolean
+  scoped_to_deploy_target: string | null
+  total_installs: number
+  by_deploy_target: Record<string, number>
+  by_ch_version: { ch_version: string; installs: number }[]
+  by_ch_flavor: { ch_flavor: string; installs: number }[]
+  by_country: { country: string; installs: number }[]
+  by_platform: { platform: string; installs: number }[]
+  source: string
+  generated_at: string
+}
+
+function summaryShape(input: {
+  total: number
+  byDeployTarget: Record<string, number>
+  byChVersion: { ch_version: string; installs: number }[]
+  byChFlavor: { ch_flavor: string; installs: number }[]
+  byCountry: { country: string; installs: number }[]
+  byPlatform: { platform: string; installs: number }[]
+  scopedToDeployTarget?: string | null
+}): SummaryBody {
+  return {
+    summary: 'chmonitor install counts',
+    anonymous: true,
+    enabled: true,
+    scoped_to_deploy_target: input.scopedToDeployTarget ?? null,
+    total_installs: input.total,
+    by_deploy_target: input.byDeployTarget,
+    by_ch_version: input.byChVersion,
+    by_ch_flavor: input.byChFlavor,
+    by_country: input.byCountry,
+    by_platform: input.byPlatform,
+    source: 'D1 ping_daily (COUNT DISTINCT of opaque SHA-256 instance id)',
+    generated_at: new Date().toISOString(),
+  }
+}
+
+function json(body: unknown, status: number): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: {
+      'content-type': 'application/json; charset=utf-8',
+      'cache-control': 'public, max-age=3600, stale-while-revalidate=86400',
+      ...CORS,
+    },
+  })
 }

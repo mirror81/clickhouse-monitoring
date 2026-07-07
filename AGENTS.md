@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Co-Authored-By: duyetbot <bot@duyet.net>
 ```
 
-Use semantic commit format with consistent scope for commit messages and PR titles. Keep wording simple. Never mention external design references, visual inspiration sites, or comparative platforms (such as 'slashy.com') in commit messages, PR titles, or PR descriptions.
+Use semantic commit format with consistent scope for commit messages and PR titles. Keep wording simple. Never mention external design references, visual inspiration sites, or comparative platforms in commit messages, PR titles, or PR descriptions.
 
 ## PR Workflow
 

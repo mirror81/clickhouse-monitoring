@@ -1,8 +1,8 @@
-import { describe, expect, it } from 'bun:test'
 import {
   type BrowserConnection,
   nextBrowserConnectionHostId,
 } from './browser-connection'
+import { describe, expect, it } from 'bun:test'
 
 const conn = (hostId: number): Pick<BrowserConnection, 'hostId'> => ({ hostId })
 

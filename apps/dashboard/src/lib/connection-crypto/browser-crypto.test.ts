@@ -1,10 +1,10 @@
-import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 import {
   __resetDeviceKeyPromiseForTest,
   decryptJson,
   encryptJson,
   getOrCreateDeviceKey,
 } from './browser-crypto'
+import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 
 // Minimal in-memory IndexedDB stub — just enough for the device-key store
 // (single object store, get/put by key). Requests resolve on a microtask, which
@@ -19,7 +19,11 @@ function installFakeIndexedDB() {
 
   const store = {
     get(key: string) {
-      const req: { onsuccess?: () => void; onerror?: () => void; result: unknown } = {
+      const req: {
+        onsuccess?: () => void
+        onerror?: () => void
+        result: unknown
+      } = {
         result: data.has(key) ? data.get(key) : undefined,
       }
       fire(req)

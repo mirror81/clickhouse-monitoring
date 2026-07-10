@@ -1,8 +1,7 @@
 import type { HostInfo } from '@chm/types/host-info'
 
-import { useMemo } from 'react'
-
 import { useHosts } from './use-hosts'
+import { useMemo } from 'react'
 import { isCloudModeClient } from '@/lib/cloud/cloud-mode'
 import { useBrowserConnections } from '@/lib/hooks/use-browser-connections'
 import { useUserConnections } from '@/lib/hooks/use-user-connections'

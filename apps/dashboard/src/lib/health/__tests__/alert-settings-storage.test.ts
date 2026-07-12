@@ -112,6 +112,7 @@ describe('loadAlertSettings — browser environment', () => {
     const custom = {
       webhookUrl: 'https://hooks.slack.com/test',
       webhookEnabled: true,
+      healthchecksUrl: 'https://hc-ping.com/abc123',
       browserNotificationsEnabled: false,
       minSeverity: 'warning' as const,
     }

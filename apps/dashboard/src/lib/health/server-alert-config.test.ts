@@ -149,6 +149,7 @@ describe('getServerAlertConfig', () => {
     expect(config).toEqual({
       webhookEnabled: true,
       webhookUrl: 'https://example.com/hook',
+      healthchecksUrl: '',
       minSeverity: 'critical',
       browserNotificationsEnabled: false,
     })
@@ -352,6 +353,7 @@ describe('getServerEmailConfig', () => {
     expect(config).toEqual({
       webhookEnabled: false,
       webhookUrl: '',
+      healthchecksUrl: '',
       minSeverity: 'warning',
       browserNotificationsEnabled: false,
     })

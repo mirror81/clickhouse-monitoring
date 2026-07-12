@@ -12,7 +12,6 @@ import type { AgentVisualizationProps } from '@/components/agents/agent-visualiz
 import type { QueryConfig } from '@/types/query-config'
 
 import { QueryInsightsCard } from './query-insights-card'
-import { isCloudflareWorkers } from '@chm/clickhouse-client/runtime/cloudflare-workers'
 import { getToolMetadata } from '@chm/mcp-server/data'
 import { type ComponentProps, type ReactNode, useEffect, useState } from 'react'
 import { AdvisorRecommendationsPanel } from '@/components/agents/advisor-recommendations-panel'
@@ -47,6 +46,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
+import { isCloudModeClient } from '@/lib/cloud/cloud-mode'
 import { cn } from '@/lib/utils'
 
 // Stable empty context object — avoids new reference on every render which
@@ -268,10 +268,14 @@ function renderStructuredOutput(output: unknown): ReactNode {
     )
   }
 
-  // Skip heavy chart rendering on Cloudflare Workers to avoid resource limits
-  // Fall back to simple data table instead
+  // Skip heavy chart rendering in cloud mode to avoid resource limits.
+  // Self-hosted (OSS) deployments always render the full visualization.
+  // NOTE: this component is client-rendered, so the environment check must be
+  // cloud-mode (build-time flag), not isCloudflareWorkers() — the latter reads
+  // browser globals (caches is defined in every browser) and would wrongly
+  // disable charts for every visitor.
   if (outputObj.type === 'visualization' && Array.isArray(outputObj.rows)) {
-    if (isCloudflareWorkers()) {
+    if (isCloudModeClient()) {
       return (
         <div className="space-y-3">
           <div className="rounded-md bg-muted/30 px-3 py-2 text-xs text-muted-foreground">

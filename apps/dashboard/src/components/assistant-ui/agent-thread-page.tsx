@@ -117,7 +117,7 @@ export function AgentThreadPage() {
                 variant="outline"
                 size="sm"
                 onClick={() => setConversationsOpen(true)}
-                className="absolute top-3 left-3 z-10 inline-flex h-8 gap-1.5 px-2.5 text-[11.5px] whitespace-nowrap"
+                className="absolute top-3 left-3 z-10 inline-flex h-8 gap-1.5 px-2.5 text-[11.5px] whitespace-nowrap bg-background shadow-sm"
               >
                 <MessagesSquareIcon className="size-3.5" />
                 Conversations

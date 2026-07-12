@@ -72,6 +72,82 @@ Client vars are inlined at build time and shipped to the browser.
 
 <Step>
 
+### Configure ClickHouse hosts
+
+chmonitor connects to one or more ClickHouse instances. Comma-separated lists configure multiple hosts; each `hostId` maps positionally to the other lists.
+
+```bash
+# One host
+CLICKHOUSE_HOST=http://localhost:8123
+CLICKHOUSE_USER=monitoring
+CLICKHOUSE_PASSWORD=your-password
+
+# Multiple hosts (comma-separated, positional)
+CLICKHOUSE_HOST=http://ch-1:8123,http://ch-2:8123,http://ch-3:8123
+CLICKHOUSE_USER=monitoring,monitoring,monitoring
+CLICKHOUSE_PASSWORD=pass-1,pass-2,pass-3
+CLICKHOUSE_NAME=ch-1,ch-2,ch-3
+```
+
+| Variable | Purpose |
+|---|---|
+| `CLICKHOUSE_HOST` | One or more URLs (`http://`/`https://`), optionally `host:port`. |
+| `CLICKHOUSE_USER` | Comma-separated user(s); a single value applies to every host. |
+| `CLICKHOUSE_PASSWORD` | Comma-separated password(s); a single value applies to every host. |
+| `CLICKHOUSE_NAME` | Comma-separated display names for the host switcher. |
+| `CLICKHOUSE_DATABASE` | Default database (default `system`). |
+| `CLICKHOUSE_MAX_EXECUTION_TIME` | Query timeout in seconds (default `60`). |
+| `CLICKHOUSE_TZ` | Session timezone for queries. |
+| `CLICKHOUSE_EXCLUDE_USER_DEFAULT` | Hide the `default` user from the UI when set. |
+
+Host `0` is `CLICKHOUSE_HOST`'s first entry and is the default in URLs (`?host=0`). Make sure the user has the grants described in the next step.
+
+</Step>
+
+<Step>
+
+### Configure Postgres hosts (optional)
+
+Postgres support is a beta **source engine** — off by default. Turn it on with the feature flag, then add connection details the same positional way as ClickHouse:
+
+```bash
+# Master switch for Postgres as a source
+CHM_FEATURE_POSTGRES_SOURCE=true
+
+# One Postgres host
+POSTGRES_HOST=db.example.com
+POSTGRES_PORT=5432
+POSTGRES_USER=chmonitor_ro
+POSTGRES_PASSWORD=my-password
+POSTGRES_DATABASE=postgres
+POSTGRES_SSLMODE=require
+POSTGRES_NAME=Production Postgres
+
+# Multiple Postgres hosts (comma-separated, positional)
+POSTGRES_HOST=db-1:5432,db-2:5432
+POSTGRES_USER=ro,ro
+POSTGRES_PASSWORD=p1,p2
+POSTGRES_NAME=pg-1,pg-2
+```
+
+| Variable | Purpose |
+|---|---|
+| `CHM_FEATURE_POSTGRES_SOURCE` | Master switch for Postgres monitoring. Default `false`. |
+| `POSTGRES_HOST` | One or more hosts, optionally `host:port`. |
+| `POSTGRES_PORT` | Port for hosts without an inline port (default `5432`). |
+| `POSTGRES_USER` | Comma-separated user(s); a single value applies to every host. |
+| `POSTGRES_PASSWORD` | Comma-separated password(s); a single value applies to every host. |
+| `POSTGRES_DATABASE` | Comma-separated database names (default `postgres`). |
+| `POSTGRES_SSLMODE` | Comma-separated sslmode (`disable`/`require`/`verify-ca`/`verify-full`). |
+| `POSTGRES_NAME` | Comma-separated display names for the host switcher. |
+| `CHM_ALLOW_PRIVATE_HOSTS` | Allow `localhost`/private addresses for local dev (ignored in Cloud). |
+
+Use a dedicated **read-only Postgres role** — chmonitor pins `default_transaction_read_only=on` on every query. Query Insights needs the `pg_stat_statements` extension; Running Queries only needs `pg_stat_activity`. See the [Postgres feature guide](/guide/features/postgres) for details.
+
+</Step>
+
+<Step>
+
 ### Configure ClickHouse
 
 Make sure the user you set in the previous step has the right grants:

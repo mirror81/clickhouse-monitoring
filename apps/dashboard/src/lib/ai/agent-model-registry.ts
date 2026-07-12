@@ -121,6 +121,13 @@ export const MODEL_REGISTRY: readonly ModelEntry[] = [
     contextLength: 262_144,
     providers: ['openrouter', 'anyrouter'],
   },
+  {
+    id: 'x-ai/grok-4.5',
+    description: 'Grok 4.5',
+    contextLength: 262_144,
+    pricing: { inputPerMillion: 2.0, outputPerMillion: 10.0 },
+    providers: ['openrouter', 'anyrouter'],
+  },
 
   // ── NVIDIA-only ──
   {

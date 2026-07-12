@@ -85,6 +85,9 @@ export const MODEL_PRICING: Record<string, [number, number]> = {
   // Qwen models (via OpenRouter)
   'qwen/qwen-2.5-72b-instruct': [0.35, 0.4],
   'qwen/qwen3.5-397b-a17b': [0.35, 0.4],
+
+  // x-ai Grok models (via OpenRouter / AnyRouter)
+  'x-ai/grok-4.5': [2.0, 10.0],
 }
 
 // ============================================================================

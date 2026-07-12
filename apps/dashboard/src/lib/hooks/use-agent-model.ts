@@ -194,14 +194,21 @@ export function useAgentModel(): UseAgentModelResult {
 
       setModels(nextModels)
 
-      // If the persisted model is no longer in the list (e.g. its provider's
-      // API key was removed), fall back to the first available model so the
-      // user is never stuck with an unselectable id.
+      // If the persisted model is no longer selectable (provider not
+      // configured on this deployment, or missing from the list), fall back to
+      // the first model whose provider IS configured. This prevents the first
+      // message from 503-ing because the client sent a model whose provider
+      // has no API key (e.g. a hardcoded `anyrouter:*` default on a deployment
+      // that only configured OpenRouter).
+      const configured = nextModels.filter((m) => m.available !== false)
+      const fallbackPool = configured.length > 0 ? configured : nextModels
       let fallbackId: OpenAIModel | undefined
       setModelState((current) => {
-        const stillAvailable = nextModels.some((m) => m.id === current)
+        const stillAvailable =
+          nextModels.some((m) => m.id === current) &&
+          nextModels.find((m) => m.id === current)?.available !== false
         if (stillAvailable) return current
-        fallbackId = nextModels[0].id
+        fallbackId = fallbackPool[0].id
         return fallbackId
       })
 

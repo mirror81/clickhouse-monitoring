@@ -133,24 +133,42 @@ async function handlePost(
 
   // Determine the outgoing body. With a `provider` hint the caller controls the
   // exact JSON (forwarded verbatim); otherwise keep the backward-compatible
-  // `{ text, content }` wrapper driven by `text`.
+  // `{ text, content }` wrapper driven by `text`. The `raw-get` provider sends
+  // a plain GET (no body) to the destination — used for healthchecks.io-style
+  // ping URLs that expect an HTTP GET.
   const usesProvider =
     typeof provider === 'string' && provider.trim().length > 0
 
   let outgoingBody: unknown
+  let outgoingMethod: 'GET' | 'POST' = 'POST'
+
   if (usesProvider) {
-    if (payload === undefined || payload === null) {
-      return createErrorResponse(
-        {
-          type: ApiErrorType.ValidationError,
-          message:
-            'Missing or invalid "payload": expected a JSON body when "provider" is set',
-        },
-        400,
-        ROUTE_CONTEXT
-      )
+    if (provider === 'raw-get') {
+      if (!url || typeof url !== 'string') {
+        return createErrorResponse(
+          {
+            type: ApiErrorType.ValidationError,
+            message: 'Missing or invalid "url": expected an HTTPS ping URL',
+          },
+          400,
+          ROUTE_CONTEXT
+        )
+      }
+      outgoingMethod = 'GET'
+    } else {
+      if (payload === undefined || payload === null) {
+        return createErrorResponse(
+          {
+            type: ApiErrorType.ValidationError,
+            message:
+              'Missing or invalid "payload": expected a JSON body when "provider" is set',
+          },
+          400,
+          ROUTE_CONTEXT
+        )
+      }
+      outgoingBody = payload
     }
-    outgoingBody = payload
   } else {
     if (!text || typeof text !== 'string') {
       return createErrorResponse(
@@ -176,9 +194,13 @@ async function handlePost(
 
   try {
     const res = await doFetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(outgoingBody),
+      method: outgoingMethod,
+      ...(outgoingMethod === 'POST'
+        ? {
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(outgoingBody),
+          }
+        : {}),
       signal: controller.signal,
     })
 

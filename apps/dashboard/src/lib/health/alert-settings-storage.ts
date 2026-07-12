@@ -4,6 +4,12 @@ export interface AlertSettings {
   /** Webhook URL (Slack/Discord-compatible). Empty when disabled. */
   webhookUrl: string
   webhookEnabled: boolean
+  /**
+   * healthchecks.io ping URL. When set, a success ("/") or failure ("/fail")
+   * GET ping is fired on every alert/recovery. Self-hosted or cloud
+   * healthchecks.io instances both accept a unique per-check ping URL.
+   */
+  healthchecksUrl: string
   browserNotificationsEnabled: boolean
   /** Severity threshold at which alerts fire: 'warning' = both warning+critical, 'critical' = only critical */
   minSeverity: 'warning' | 'critical'
@@ -12,6 +18,7 @@ export interface AlertSettings {
 export const DEFAULT_ALERT_SETTINGS: AlertSettings = {
   webhookUrl: '',
   webhookEnabled: false,
+  healthchecksUrl: '',
   // Enabled by default so a fresh install surfaces critical alerts in-app
   // without any configuration. The browser Notification API is only invoked
   // when permission is already 'granted' (see fireBrowserNotification).
@@ -40,6 +47,10 @@ export function loadAlertSettings(): AlertSettings {
         typeof parsed.browserNotificationsEnabled === 'boolean'
           ? parsed.browserNotificationsEnabled
           : DEFAULT_ALERT_SETTINGS.browserNotificationsEnabled,
+      healthchecksUrl:
+        typeof parsed.healthchecksUrl === 'string'
+          ? parsed.healthchecksUrl
+          : DEFAULT_ALERT_SETTINGS.healthchecksUrl,
       minSeverity:
         parsed.minSeverity === 'warning' || parsed.minSeverity === 'critical'
           ? parsed.minSeverity

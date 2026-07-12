@@ -181,6 +181,10 @@ function buildStaticModels(): ModelCapability[] {
         contextLength: entry.contextLength,
         formattedContextLength: formatCompactNumber(entry.contextLength),
         isFree,
+        // `available` reflects whether THIS provider's key is configured, even
+        // when the whole list is returned as a dev fallback because no provider
+        // is configured at all. The client uses it to avoid sending a model
+        // whose provider would 503 on the first message.
         available: isProviderConfigured(provider),
         pricing: entry.pricing,
       })

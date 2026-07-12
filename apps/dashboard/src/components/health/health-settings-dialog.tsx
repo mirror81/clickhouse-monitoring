@@ -28,6 +28,7 @@ import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   fireBrowserNotification,
+  fireHealthchecks,
   fireWebhook,
 } from '@/lib/health/alert-dispatcher'
 import {
@@ -136,6 +137,16 @@ export function HealthSettingsDialog() {
     setAlerts((prev) => ({ ...prev, browserNotificationsEnabled: checked }))
   }
 
+  const handleTestHealthchecks = async () => {
+    if (!alerts.healthchecksUrl) {
+      toast.error('Enter a healthchecks.io ping URL first')
+      return
+    }
+    const ok = await fireHealthchecks(alerts.healthchecksUrl, 'alert')
+    if (ok) toast.success('healthchecks.io test ping sent')
+    else toast.error('healthchecks.io ping failed')
+  }
+
   const handleTestWebhook = async () => {
     if (!alerts.webhookUrl) {
       toast.error('Enter a webhook URL first')
@@ -217,7 +228,7 @@ export function HealthSettingsDialog() {
         <Settings className="mr-2 size-4" />
         Settings
       </DialogTrigger>
-      <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto max-w-2xl">
+      <DialogContent className="max-h-[calc(100dvh-2rem)] w-[calc(100vw-2rem)] max-w-4xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Health Settings</DialogTitle>
           <DialogDescription>
@@ -227,7 +238,7 @@ export function HealthSettingsDialog() {
         </DialogHeader>
 
         <Tabs defaultValue="thresholds">
-          <TabsList>
+          <TabsList className="flex-wrap h-auto">
             <TabsTrigger value="thresholds">Thresholds</TabsTrigger>
             <TabsTrigger value="alerts">Alerts</TabsTrigger>
             <TabsTrigger value="active">Active</TabsTrigger>
@@ -337,6 +348,43 @@ export function HealthSettingsDialog() {
                   checked={alerts.browserNotificationsEnabled}
                   onCheckedChange={handleEnableBrowser}
                 />
+              </div>
+            </div>
+
+            <Separator />
+
+            <div className="flex flex-col gap-2 rounded-md border p-3">
+              <div className="flex items-center justify-between">
+                <div className="flex flex-col">
+                  <Label className="text-sm font-medium">
+                    healthchecks.io pings
+                  </Label>
+                  <span className="text-xs text-muted-foreground">
+                    Send a GET ping to a healthchecks.io check URL on each alert
+                    (append <code className="text-xs">/fail</code> automatically
+                    on recovery)
+                  </span>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Input
+                  placeholder="https://hc-ping.com/your-uuid"
+                  value={alerts.healthchecksUrl}
+                  onChange={(e) =>
+                    setAlerts((prev) => ({
+                      ...prev,
+                      healthchecksUrl: e.target.value.trim(),
+                    }))
+                  }
+                />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => void handleTestHealthchecks()}
+                  disabled={!alerts.healthchecksUrl}
+                >
+                  Send test
+                </Button>
               </div>
             </div>
 

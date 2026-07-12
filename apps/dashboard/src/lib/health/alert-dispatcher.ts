@@ -159,6 +159,41 @@ export async function fireWebhook(
     clearTimeout(timeout)
   }
 }
+
+/**
+ * Fire a healthchecks.io ping. healthchecks.io accepts a GET to the check's
+ * unique ping URL for success, or `<url>/fail` for failure. We route the GET
+ * through the existing `/api/v1/health/webhook` proxy (which already permits
+ * public HTTPS URLs and enforces SSRF guards) via its `provider: 'raw-get'`
+ * verbatim-forward path — so no direct browser→healthchecks.io egress and no
+ * new server endpoint is needed.
+ */
+export async function fireHealthchecks(
+  url: string,
+  kind: 'alert' | 'recovery'
+): Promise<boolean> {
+  const base = url.replace(/\/+$/, '')
+  const target = kind === 'recovery' ? `${base}/fail` : base
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 10_000)
+  try {
+    const res = await fetch('/api/v1/health/webhook', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        url: target,
+        provider: 'raw-get',
+      }),
+      signal: controller.signal,
+    })
+    return res.ok
+  } catch {
+    return false
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
 /**
  * Send a test PagerDuty event (trigger, immediately followed by resolve) to a
  * specific service's routing key, via the `/api/v1/health/webhook` proxy's
@@ -221,6 +256,9 @@ export async function dispatchAlert(alert: HealthAlertEvent): Promise<void> {
     if (settings.webhookEnabled && settings.webhookUrl) {
       await fireWebhook(event)
     }
+    if (settings.healthchecksUrl) {
+      await fireHealthchecks(settings.healthchecksUrl, event.kind ?? 'alert')
+    }
   } catch (err) {
     console.error('[health] dispatchAlert failed', err)
   }
@@ -250,6 +288,9 @@ export async function dispatchRecovery(alert: HealthAlertEvent): Promise<void> {
     }
     if (settings.webhookEnabled && settings.webhookUrl) {
       await fireWebhook(event)
+    }
+    if (settings.healthchecksUrl) {
+      await fireHealthchecks(settings.healthchecksUrl, 'recovery')
     }
   } catch (err) {
     console.error('[health] dispatchRecovery failed', err)

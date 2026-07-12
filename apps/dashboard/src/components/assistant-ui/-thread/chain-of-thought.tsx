@@ -20,20 +20,14 @@ import type {
 } from '@assistant-ui/react'
 import type { ReactNode } from 'react'
 
-import { useMessage } from '@assistant-ui/react'
 import { MarkdownText } from '@/components/assistant-ui/markdown-text'
 import {
-  Reasoning,
   ReasoningContent,
   ReasoningRoot,
+  ReasoningText,
   ReasoningTrigger,
 } from '@/components/assistant-ui/reasoning'
 import { ToolFallback } from '@/components/assistant-ui/tool-fallback'
-import {
-  ToolGroupContent,
-  ToolGroupRoot,
-  ToolGroupTrigger,
-} from '@/components/assistant-ui/tool-group'
 
 // ---------------------------------------------------------------------------
 // GroupedParts groupBy — module-level stable reference
@@ -90,7 +84,17 @@ function renderLeafPart(part: EnrichedPartState) {
     }
     case 'reasoning': {
       const isActive = part.status?.type === 'running'
-      return <Reasoning text={part.text ?? ''} active={isActive} />
+      // The group-reasoning branch already renders the ReasoningRoot +
+      // ReasoningTrigger ("Thought process") shell; here we render only the
+      // inner text so the trigger is not duplicated.
+      return (
+        <ReasoningContent>
+          <ReasoningText
+            text={part.text ?? ''}
+            className={isActive ? 'opacity-70' : undefined}
+          />
+        </ReasoningContent>
+      )
     }
     case 'tool-call': {
       if (part.toolUI) return <>{part.toolUI}</>
@@ -103,33 +107,11 @@ function renderLeafPart(part: EnrichedPartState) {
 }
 
 /**
- * A run of adjacent tool calls. Stays expanded while ANY tool in the run is
- * still executing OR the message is still streaming its final answer, so the
- * group never collapses mid-turn (before the assistant's final text lands). It
- * folds into tidy history only once the whole turn is done. The trigger's own
- * spinner keeps tracking the tools' status, not the message's.
- *
- * Reads `useMessage` here (not inside `renderGroupedPart`) because that render
- * function is called per group in a switch — hooks must live in a component.
+ * Renders a run of adjacent tool calls as sibling leaf rows — one foldable
+ * row per tool (the ToolFallback/tool-output row owns its own expand state),
+ * NOT a single outer "N tool calls" group that forces two folds to reach
+ * any tool's content.
  */
-function ToolGroup({
-  count,
-  status,
-  children,
-}: {
-  readonly count: number
-  readonly status: MessagePartStatus | ToolCallMessagePartStatus
-  readonly children: ReactNode
-}) {
-  const toolsRunning = status?.type === 'running'
-  const messageRunning = useMessage((m) => m.status?.type === 'running')
-  return (
-    <ToolGroupRoot isRunning={toolsRunning || messageRunning}>
-      <ToolGroupTrigger count={count} status={status} />
-      <ToolGroupContent>{children}</ToolGroupContent>
-    </ToolGroupRoot>
-  )
-}
 
 /**
  * Renderer function for MessagePrimitive.GroupedParts.
@@ -149,11 +131,9 @@ export function renderGroupedPart({ part, children }: GroupedRenderInfo) {
       )
     }
     case 'group-tool': {
-      return (
-        <ToolGroup count={part.indices.length} status={part.status}>
-          {children}
-        </ToolGroup>
-      )
+      // Render each tool call as its own sibling row (one fold per tool),
+      // not a single outer "N tool calls" group that requires two folds.
+      return <>{children}</>
     }
     default: {
       // Leaf part — cast is safe: non-group parts are EnrichedPartState

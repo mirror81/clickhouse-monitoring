@@ -62,12 +62,13 @@ function makeRequest(body: unknown): Request {
   })
 }
 
-/** A fetch stub that records the URL + body it was called with. */
+/** A fetch stub that records the URL + method + body it was called with. */
 function stubFetch() {
-  const calls: { url: string; body: string }[] = []
+  const calls: { url: string; method: string; body: string }[] = []
   const fetchImpl = (async (input: unknown, init?: RequestInit) => {
     calls.push({
       url: String(input),
+      method: init?.method ?? 'GET',
       body: typeof init?.body === 'string' ? init.body : '',
     })
     return new Response('ok', { status: 200 })
@@ -173,6 +174,33 @@ describe('health webhook proxy — provider verbatim forwarding', () => {
       }),
       { resolveHostAddresses: resolvePublic, fetchImpl }
     )
+
+    expect(res.status).toBe(400)
+    expect(calls).toHaveLength(0)
+  })
+
+  test('raw-get sends a GET with no body (healthchecks.io ping)', async () => {
+    const { calls, fetchImpl } = stubFetch()
+    const res = await handlePost(
+      makeRequest({
+        url: 'https://hc-ping.com/your-uuid',
+        provider: 'raw-get',
+      }),
+      { resolveHostAddresses: resolvePublic, fetchImpl }
+    )
+
+    expect(res.status).toBe(200)
+    expect(calls).toHaveLength(1)
+    expect(calls[0].method).toBe('GET')
+    expect(calls[0].body).toBe('')
+  })
+
+  test('raw-get rejects a missing url', async () => {
+    const { calls, fetchImpl } = stubFetch()
+    const res = await handlePost(makeRequest({ provider: 'raw-get' }), {
+      resolveHostAddresses: resolvePublic,
+      fetchImpl,
+    })
 
     expect(res.status).toBe(400)
     expect(calls).toHaveLength(0)

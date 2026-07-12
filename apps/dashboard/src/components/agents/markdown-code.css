@@ -16,12 +16,14 @@
  * PR #1184 — do not remove these overrides.
  */
 
-/* Reduce the column gap between the language header and the code body */
+/* Remove the unwanted outer border on Streamdown code-block cards */
 .markdown-content [data-streamdown='code-block'] {
   gap: 0.25rem; /* 4 px instead of 8 px */
+  border: 0;
+  background-color: transparent;
 }
 
-/* Tighten vertical padding inside the code body */
+/* Tighten vertical padding inside the code body (keep the inner border) */
 .markdown-content [data-streamdown='code-block-body'] {
   padding-top: 0.5rem;    /* 8 px instead of 16 px */
   padding-bottom: 0.5rem; /* 8 px instead of 16 px */

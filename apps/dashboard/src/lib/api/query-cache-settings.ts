@@ -113,6 +113,11 @@ export function buildQueryCacheSettings({
   const settings: ClickHouseSettings = {
     use_query_cache: 1,
     query_cache_ttl: ttlSeconds,
+    // ClickHouse 26.3 requires `overflow_mode = 'throw'` whenever
+    // `use_query_cache = 1` is set, else the query fails with error 731
+    // (`QUERY_CACHE_USED_WITH_NON_THROW_OVERFLOW_MODE`). Setting it here keeps
+    // the query cache opt-in compatible with that host version.
+    overflow_mode: 'throw',
   }
 
   if (

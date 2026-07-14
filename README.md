@@ -8,8 +8,7 @@
 <h1 align="center">chmonitor</h1>
 <p align="center"><strong>The operational advisor for ClickHouse</strong></p>
 
-<p align="center">
-  <a href="https://github.com/chmonitor/chmonitor/actions/workflows/ci.yml"><img src="https://github.com/chmonitor/chmonitor/actions/workflows/ci.yml/badge.svg" alt="Build and Test"></a>
+[![Build and Test](https://github.com/chmonitor/chmonitor/actions/workflows/ci.yml/badge.svg)](https://github.com/chmonitor/chmonitor/actions/workflows/ci.yml)
 [![GitHub stars](https://img.shields.io/github/stars/chmonitor/chmonitor?style=flat&logo=github&label=stars)](https://github.com/chmonitor/chmonitor/stargazers)
 [![Latest release](https://img.shields.io/github/v/release/chmonitor/chmonitor?sort=semver&label=release)](https://github.com/chmonitor/chmonitor/releases)
 [![Docker image](https://img.shields.io/badge/ghcr.io-chmonitor%2Fchmonitor-2496ED?logo=docker&logoColor=white)](https://github.com/chmonitor/chmonitor/pkgs/container/chmonitor)

@@ -63,6 +63,7 @@ import type { ClickHouseSettings } from '@clickhouse/client'
 import type { ClickHouseVersion } from '@chm/clickhouse-client/clickhouse-version'
 
 import { meetsMinVersion } from '@chm/clickhouse-client/clickhouse-version'
+import { warn } from '@chm/logger'
 
 /** ClickHouse added the query cache (`use_query_cache`) in 23.5. */
 const MIN_QUERY_CACHE_VERSION = { major: 23, minor: 5 } as const
@@ -110,14 +111,16 @@ export function buildQueryCacheSettings({
     return {}
   }
 
+  // NOTE: do NOT add a bare `overflow_mode` setting here — no such setting
+  // exists in ANY ClickHouse version (only `result_overflow_mode`,
+  // `timeout_overflow_mode`, etc.), and an unknown setting name fails the
+  // entire query with "Setting overflow_mode is neither a builtin setting…".
+  // Error 731 (QUERY_CACHE_USED_WITH_NON_THROW_OVERFLOW_MODE) is instead
+  // handled by the callers, which skip the query cache whenever a non-'throw'
+  // `result_overflow_mode` is in effect (see query-executor.ts).
   const settings: ClickHouseSettings = {
     use_query_cache: 1,
     query_cache_ttl: ttlSeconds,
-    // ClickHouse 26.3 requires `overflow_mode = 'throw'` whenever
-    // `use_query_cache = 1` is set, else the query fails with error 731
-    // (`QUERY_CACHE_USED_WITH_NON_THROW_OVERFLOW_MODE`). Setting it here keeps
-    // the query cache opt-in compatible with that host version.
-    overflow_mode: 'throw',
   }
 
   if (
@@ -148,4 +151,104 @@ export function buildQueryCacheSettings({
   }
 
   return settings
+}
+
+/**
+ * Detect ClickHouse's UNKNOWN_SETTING rejection (error code 115). The message
+ * wording varies across versions:
+ * - "Unknown setting 'use_query_cache'" (older servers)
+ * - "Setting x is neither a builtin setting nor started with the prefix
+ *   'SQL_' registered for user-defined settings" (newer servers)
+ * Accepts a thrown Error or a `FetchDataResult['error']`-shaped object.
+ */
+export function isUnknownSettingError(err: unknown): boolean {
+  const message =
+    err && typeof err === 'object' && 'message' in err
+      ? String((err as { message?: unknown }).message ?? '')
+      : ''
+  if (!message) return false
+  return (
+    /unknown setting/i.test(message) ||
+    /neither a builtin setting/i.test(message) ||
+    /\bCode:\s*115\b/.test(message)
+  )
+}
+
+const UNKNOWN_SETTING_RETRY_WARNING =
+  '[query-cache] host rejected a query-cache setting as unknown; retrying without cache settings'
+
+/**
+ * Hosts that rejected the cache settings, so subsequent polls skip sending
+ * them instead of paying a failed query + retry on EVERY poll. Mirrors the
+ * 24h TTL of the per-host version cache that produced the wrong settings.
+ */
+const rejectedHosts = new Map<string, number>()
+const REJECTION_TTL_MS = 24 * 60 * 60 * 1000
+
+/** Test-only: forget remembered per-host rejections. */
+export function clearUnknownSettingRejections(): void {
+  rejectedHosts.clear()
+}
+
+/**
+ * Any-ClickHouse-version safety net: the query cache is an optimization, so
+ * its settings must NEVER fail a query. Version gating above handles the
+ * versions we know about, but a host outside the tested matrix (very old,
+ * very new, or a fork) may still reject a setting name as unknown — in that
+ * case, retry ONCE without the cache settings instead of surfacing the
+ * error, and remember the rejection per host so later polls skip the wasted
+ * round-trip.
+ *
+ * Errors are detected on both conventions: a thrown error (raw client calls)
+ * and a `result.error` field (`fetchData`-shaped results).
+ */
+export async function withUnknownSettingRetry<T>(
+  cacheSettings: ClickHouseSettings,
+  run: (settings: ClickHouseSettings) => Promise<T>,
+  hostId?: number | string
+): Promise<T> {
+  if (Object.keys(cacheSettings).length === 0) return run(cacheSettings)
+
+  const hostKey = hostId === undefined ? undefined : String(hostId)
+  if (hostKey !== undefined) {
+    const expiry = rejectedHosts.get(hostKey)
+    if (expiry !== undefined && expiry > Date.now()) return run({})
+    if (expiry !== undefined) rejectedHosts.delete(hostKey)
+  }
+
+  let result: T | undefined
+  let resolved = false
+  let err: unknown
+  try {
+    result = await run(cacheSettings)
+    resolved = true
+    err = (result as { error?: unknown } | null | undefined)?.error
+  } catch (thrown) {
+    if (!isUnknownSettingError(thrown)) throw thrown
+    err = thrown
+  }
+  if (resolved && !isUnknownSettingError(err)) return result as T
+
+  warn(UNKNOWN_SETTING_RETRY_WARNING, err)
+  if (hostKey !== undefined) {
+    rejectedHosts.set(hostKey, Date.now() + REJECTION_TTL_MS)
+  }
+  return run({})
+}
+
+/**
+ * The one entry point call sites should use: build the version-gated cache
+ * settings AND run the query under the unknown-setting safety net in a single
+ * step, so no future caller can obtain cache settings without the retry
+ * protection. `hostId` keys the per-host rejection memo.
+ */
+export async function runWithQueryCache<T>(
+  opts: QueryCacheSettingsOptions & { hostId: number | string },
+  run: (settings: ClickHouseSettings) => Promise<T>
+): Promise<T> {
+  return withUnknownSettingRetry(
+    buildQueryCacheSettings(opts),
+    run,
+    opts.hostId
+  )
 }

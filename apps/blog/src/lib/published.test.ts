@@ -1,12 +1,13 @@
-import { describe, expect, test } from 'bun:test'
 import { isPublished } from './published'
+import { describe, expect, test } from 'bun:test'
 
 // Minimal stand-in for a blog collection entry's `data` — only the two
 // fields `isPublished` reads.
 function post(overrides: { draft?: boolean; date: Date }) {
-  return { draft: overrides.draft ?? false, date: overrides.date } as Parameters<
-    typeof isPublished
-  >[0]
+  return {
+    draft: overrides.draft ?? false,
+    date: overrides.date,
+  } as Parameters<typeof isPublished>[0]
 }
 
 describe('isPublished', () => {

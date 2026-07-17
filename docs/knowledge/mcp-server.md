@@ -61,7 +61,7 @@ curl -X POST https://your-deployment.example.com/api/mcp \
 
 ## Security
 
-- **Read-only**: All MCP tools execute read-only operations (`readonly: 1`)
+- **Read-only**: All MCP tools execute read-only operations (`readonly: 1`), and every tool declares that via MCP tool annotations (`readOnlyHint: true`, `destructiveHint: false`, `idempotentHint: true`, `openWorldHint: false`, plus a human-readable `title`) so clients can auto-approve calls instead of guessing from the description text. See `READONLY_ANNOTATIONS` in `packages/mcp-server/src/tools/helpers.ts`.
 - **Secure by default**: The `/api/mcp` endpoint returns 401 when no auth scheme is configured. Anonymous access requires an explicit operator opt-in via `CHM_MCP_PUBLIC=true`.
 - **Rate limited** (#2704): Every verb (POST/GET/DELETE) is throttled per client IP via the same `checkRateLimitDurable` token-bucket pattern used by `POST /api/v1/agent` — 30 req/min by default, configurable with `RATE_LIMIT_MCP_PER_MIN` (see `docs/content/reference/environment-variables.mdx` → Rate limiting). Blocked requests get `429` + `Retry-After`. Checked in `apps/dashboard/src/routes/api/mcp.ts` (`checkMcpRateLimit`), *before* auth resolves — the dashboard app owns the check because the shared, SDK-free `@chm/mcp-server` package cannot depend on `apps/dashboard`'s rate limiter (dependency-cruiser `no-packages-to-apps`), so the standalone `apps/mcp` Worker is not yet covered (follow-up).
 - **Query limits**: Same `CLICKHOUSE_MAX_EXECUTION_TIME` timeout as dashboard

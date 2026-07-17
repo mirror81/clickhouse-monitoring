@@ -116,7 +116,10 @@ describe('buildPushoverMessage — message body', () => {
 
 describe('buildPushoverBody', () => {
   test('includes token + user alongside the message fields', () => {
-    const body = buildPushoverBody(CRITICAL, { token: 'app_tok', user: 'usr_key' })
+    const body = buildPushoverBody(CRITICAL, {
+      token: 'app_tok',
+      user: 'usr_key',
+    })
     expect(body.token).toBe('app_tok')
     expect(body.user).toBe('usr_key')
     expect(body.title).toBe('[CRITICAL] Failed mutations')

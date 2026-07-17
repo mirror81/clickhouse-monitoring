@@ -1,5 +1,3 @@
-import { useCallback, useRef } from 'react'
-
 import type { FocusEvent, KeyboardEvent } from 'react'
 
 import {
@@ -9,6 +7,7 @@ import {
   type TreeArrowVerticalKey,
   type TreeNavItem,
 } from '../tree/tree-keyboard-nav'
+import { useCallback, useRef } from 'react'
 
 const VERTICAL_KEYS: ReadonlySet<string> = new Set<TreeArrowVerticalKey>([
   'ArrowDown',

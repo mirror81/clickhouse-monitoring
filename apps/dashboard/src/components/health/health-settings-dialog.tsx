@@ -86,9 +86,7 @@ export function HealthSettingsDialog() {
       .catch(() => setNtfyStatus(null))
     fetch('/api/v1/health/pushover-test')
       .then((res) => (res.ok ? res.json() : null))
-      .then((data) =>
-        setPushoverStatus(data as { configured: boolean } | null)
-      )
+      .then((data) => setPushoverStatus(data as { configured: boolean } | null))
       .catch(() => setPushoverStatus(null))
   }, [open])
 

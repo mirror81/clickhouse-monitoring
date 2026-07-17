@@ -1,10 +1,10 @@
-import { describe, expect, it } from 'bun:test'
 import {
   getArrowLeftAction,
   getArrowRightAction,
   getNextFocusIndex,
   type TreeNavItem,
 } from './tree-keyboard-nav'
+import { describe, expect, it } from 'bun:test'
 
 describe('getNextFocusIndex', () => {
   it('ArrowDown moves to the next item', () => {

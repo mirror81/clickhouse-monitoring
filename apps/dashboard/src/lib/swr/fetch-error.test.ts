@@ -7,11 +7,10 @@
  * adds nothing over the caller's own title.
  */
 
-import { describe, expect, it } from 'bun:test'
-
 import type { FetchError } from './fetch-error'
 
 import { describeError, throwIfNotOk } from './fetch-error'
+import { describe, expect, it } from 'bun:test'
 
 function fetchError(message: string, status?: number): FetchError {
   const err = new Error(message) as FetchError

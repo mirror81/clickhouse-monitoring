@@ -1,7 +1,10 @@
 import type { AlertPayload } from './adapters/types'
 
 import { buildPushoverBody } from './adapters/pushover'
-import { dispatchPushover, PUSHOVER_MESSAGES_API_URL } from './pushover-dispatch'
+import {
+  dispatchPushover,
+  PUSHOVER_MESSAGES_API_URL,
+} from './pushover-dispatch'
 import { describe, expect, test } from 'bun:test'
 
 /** A fetch stub that records the request it was called with. */

@@ -44,6 +44,7 @@ import {
   useAlertRoutesMutations,
   usePagerDutyServices,
 } from '@/lib/hooks/use-alert-routes'
+import { describeError } from '@/lib/swr/fetch-error'
 import { cn } from '@/lib/utils'
 
 function RouteRow({
@@ -66,7 +67,7 @@ function RouteRow({
       await deleteRoute(route.id)
       onDeleted()
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to delete route')
+      toast.error('Failed to delete route', { description: describeError(err) })
     } finally {
       setBusy(false)
       setConfirming(false)
@@ -271,7 +272,7 @@ function AddRouteForm({ onCreated }: { onCreated: () => void }) {
       reset()
       onCreated()
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to create route')
+      toast.error('Failed to create route', { description: describeError(err) })
     } finally {
       setBusy(false)
     }

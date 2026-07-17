@@ -33,6 +33,7 @@ import {
   useCustomAlertRulesMutations,
   useMetricCatalog,
 } from '@/lib/hooks/use-custom-alert-rules'
+import { describeError } from '@/lib/swr/fetch-error'
 import { cn } from '@/lib/utils'
 
 function RuleRow({
@@ -58,8 +59,10 @@ function RuleRow({
     try {
       await deleteRule(rule.id)
       onDeleted()
-    } catch {
-      toast.error('Failed to delete custom rule')
+    } catch (err) {
+      toast.error('Failed to delete custom rule', {
+        description: describeError(err),
+      })
     } finally {
       setBusy(false)
       setConfirming(false)
@@ -176,9 +179,9 @@ function AddRuleForm({ onCreated }: { onCreated: () => void }) {
       setCritical('')
       onCreated()
     } catch (err) {
-      toast.error(
-        err instanceof Error ? err.message : 'Failed to save custom rule'
-      )
+      toast.error('Failed to save custom rule', {
+        description: describeError(err),
+      })
     } finally {
       setBusy(false)
     }

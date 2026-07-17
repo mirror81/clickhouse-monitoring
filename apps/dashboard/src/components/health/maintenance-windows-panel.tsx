@@ -30,6 +30,7 @@ import {
   useMaintenanceWindows,
   useMaintenanceWindowsMutations,
 } from '@/lib/hooks/use-maintenance-windows'
+import { describeError } from '@/lib/swr/fetch-error'
 import { useHosts } from '@/lib/swr/use-hosts'
 import { cn } from '@/lib/utils'
 
@@ -77,8 +78,10 @@ function WindowRow({
     try {
       await deleteWindow(window.id)
       onDeleted()
-    } catch {
-      toast.error('Failed to delete maintenance window')
+    } catch (err) {
+      toast.error('Failed to delete maintenance window', {
+        description: describeError(err),
+      })
     } finally {
       setBusy(false)
       setConfirming(false)
@@ -170,9 +173,9 @@ function AddWindowForm({ onCreated }: { onCreated: () => void }) {
       setReason('')
       onCreated()
     } catch (err) {
-      toast.error(
-        err instanceof Error ? err.message : 'Failed to create window'
-      )
+      toast.error('Failed to create maintenance window', {
+        description: describeError(err),
+      })
     } finally {
       setBusy(false)
     }
